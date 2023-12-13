@@ -87,7 +87,7 @@ void ATPSPlayer::BeginPlay()
 	_sniperUI->SetVisibility(ESlateVisibility::Hidden);
 	_crosshairUI->AddToViewport();
 	_crosshairUI->SetVisibility(ESlateVisibility::Hidden);
-	_crosshairUI->SetVisibility(ESlateVisibility::Visible);
+
 
 	// 기본으로 스나이퍼건을 사용하도록 설정
 	ChangeToSniperGun();
