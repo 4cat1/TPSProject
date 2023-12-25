@@ -29,6 +29,8 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 public:
+	//UPROPERTY(VisibleAnywhere, Category = Component)
+	//class UPlayerBaseComponent* playerMove;
 	UPROPERTY(VisibleAnywhere, Category = Camera)
 	class USpringArmComponent* springArmComp;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
@@ -39,6 +41,8 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* MoveIA;
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* RunIA;
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* LookUpIA;
 	UPROPERTY(EditAnywhere, Category = "Input")
@@ -51,6 +55,8 @@ public:
 	UInputAction* IA_2;
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* IA_Aim;
+
+	
 public:
 	void Move(const FInputActionValue& Value);
 	void LookUp(const FInputActionValue& Value);
@@ -79,6 +85,8 @@ public:
 
 	// 스나이퍼 조준
 	void SniperAim();
+
+	void InputRun();
 	// 스나이퍼 조준 중인지 여부
 	bool bSniperAim = false;
 
@@ -96,6 +104,15 @@ public:
 	// 총알 파편 효과 공장
 	UPROPERTY(EditAnywhere, Category = BulletEffect)
 	class UParticleSystem* bulletEffectFactory;
+	UPROPERTY(EditAnywhere, Category = BulletEffect)
+	float walkSpeed = 200;
+	UPROPERTY(EditAnywhere, Category = BulletEffect)
+	float runSpeed = 600;
+	UPROPERTY(EditAnywhere, Category = CameraMotion)
+	TSubclassOf<class UCameraShakeBase> cameraShake;
+
+	UPROPERTY(EditDefaultsOnly, Category = Sound)
+	class USoundBase* bulletSound;
 
 
 private:

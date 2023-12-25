@@ -6,7 +6,12 @@
 #include "EnhancedInputComponent.h"
 #include "Bullet.h"
 #include "MyUserWidget.h"
+//#include "Sound/SoundBase.h"
 #include <Kismet/GameplayStatics.h>
+#include <GameFramework/CharacterMovementComponent.h>
+#include "PlayerAnim.h"
+#include "EnemyFSM.h"
+//#include "PlayerMove.h"
 #include "TPSProject.h"
 
 // Sets default values
@@ -15,7 +20,7 @@ ATPSPlayer::ATPSPlayer()
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	// 1. 스켈레탈메시 데이터를 불러오고 싶다.
-	ConstructorHelpers::FObjectFinder<USkeletalMesh> tempMesh(TEXT("SkeletalMesh'/Game/Characters/Mannequins/Meshes/SKM_Manny.SKM_Manny'"));
+	ConstructorHelpers::FObjectFinder<USkeletalMesh> tempMesh(TEXT("/Game/AnimStarterPack/UE4_Mannequin/Mesh/SK_Mannequin.SK_Mannequin"));
 	if (tempMesh.Succeeded()) {
 		GetMesh()->SetSkeletalMesh(tempMesh.Object);
 		// 2. Mesh 컴포넌트의 위치와 회전 값을 설정하고 싶다.
@@ -39,7 +44,7 @@ ATPSPlayer::ATPSPlayer()
 	// 4. 총 스켈레탈메시 컴포넌트 등록
 	gunMeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("GunMeshComp"));
 	// 4-1. 부모 컴포넌트를 Mesh 컴포넌트로 설정
-	gunMeshComp->SetupAttachment(GetMesh());
+	gunMeshComp->SetupAttachment(GetMesh(), TEXT("hand_rSocket"));
 	// 4-2. 스켈레탈메시 데이터 로드
 	ConstructorHelpers::FObjectFinder<USkeletalMesh> TempGunMesh(TEXT("SkeletalMesh'/Game/FPWeapon/Mesh/SK_FPGun.SK_FPGun'"));
 	// 4-3. 데이터로드가 성공했다면
@@ -48,13 +53,15 @@ ATPSPlayer::ATPSPlayer()
 		// 4-4. 스켈레탈메시 데이터 할당
 		gunMeshComp->SetSkeletalMesh(TempGunMesh.Object);
 		// 4-5. 위치 조정하기
-		gunMeshComp->SetRelativeLocation(FVector(-14, 52, 120));
+		gunMeshComp->SetRelativeLocation(FVector(-17, 10, -3));
+		// 회전 조정하기
+		gunMeshComp->SetRelativeRotation(FRotator(0, 90, 0));
 	}
 
 	// 5. 스나이퍼건 컴포넌트 등록
 	sniperGunComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SniperGunComp"));
 	// 5-1. 부모 컴포넌트를 Mesh 컴포넌트로 설정
-	sniperGunComp->SetupAttachment(GetMesh());
+	sniperGunComp->SetupAttachment(GetMesh(), TEXT("hand_rSocket"));
 	// 5-2. 스태틱메시 데이터 로드
 	ConstructorHelpers::FObjectFinder<UStaticMesh> TempSniperMesh(TEXT("StaticMesh'/Game/SniperGun/sniper1.sniper1'"));
 	// 5-3. 데이터로드가 성공했다면
@@ -63,16 +70,25 @@ ATPSPlayer::ATPSPlayer()
 		// 5-4. 스태틱메시 데이터 할당
 		sniperGunComp->SetStaticMesh(TempSniperMesh.Object);
 		// 5-5. 위치 조정하기
-		sniperGunComp->SetRelativeLocation(FVector(-22, 55, 120));
+		sniperGunComp->SetRelativeLocation(FVector(-42, 7, 1));
+		// 회전 조정하기
+		sniperGunComp->SetRelativeRotation(FRotator(0, 90, 0));
 		// 5-6. 크기 조정하기
 		sniperGunComp->SetRelativeScale3D(FVector(0.15f));
 	}
+	ConstructorHelpers::FObjectFinder<USoundBase> tempSound(TEXT("/Game/SniperGun/Rifle.Rifle"));
+	if (tempSound.Succeeded()) {
+		bulletSound = tempSound.Object; 
+	}
+	//playerMove = CreateDefaultSubobject<UPlayerMove>(TEXT("PlayerMove"));
 }
 
 // Called when the game starts or when spawned
 void ATPSPlayer::BeginPlay()
 {
 	Super::BeginPlay();
+	//초기 속도를 걷기로 설정
+	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
 	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem
@@ -112,7 +128,7 @@ void ATPSPlayer::PostInitializeComponents()
 void ATPSPlayer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	Locomotion();
+	//Locomotion();
 }
 
 
@@ -125,6 +141,8 @@ void ATPSPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 		EnhancedInputComponent->BindAction(MoveIA, ETriggerEvent::Triggered, this, &ATPSPlayer::Move);
 		EnhancedInputComponent->BindAction(LookUpIA, ETriggerEvent::Triggered, this, &ATPSPlayer::LookUp);
 		EnhancedInputComponent->BindAction(JumpIA, ETriggerEvent::Triggered, this, &ATPSPlayer::InputJump);
+		EnhancedInputComponent->BindAction(RunIA, ETriggerEvent::Started, this, &ATPSPlayer::InputRun);
+		EnhancedInputComponent->BindAction(RunIA, ETriggerEvent::Completed, this, &ATPSPlayer::InputRun);
 		EnhancedInputComponent->BindAction(FireIA, ETriggerEvent::Triggered, this, &ATPSPlayer::InputFire);
 		EnhancedInputComponent->BindAction(IA_1, ETriggerEvent::Triggered, this, &ATPSPlayer::ChangeToGrenadeGun);
 		EnhancedInputComponent->BindAction(IA_2, ETriggerEvent::Triggered, this, &ATPSPlayer::ChangeToSniperGun);
@@ -146,6 +164,10 @@ void ATPSPlayer::Move(const FInputActionValue& Value)
 	{
 		moveDirection.Y = _currentValue.X;
 		moveDirection.X = _currentValue.Y;
+		//From Locomotion
+		moveDirection = FTransform(GetControlRotation()).TransformVector(moveDirection);
+		AddMovementInput(moveDirection);
+		moveDirection = FVector::ZeroVector; //ZeroVector; == FVector(0,0,0)
 	}
 }
 
@@ -165,6 +187,17 @@ void ATPSPlayer::InputJump(const FInputActionValue& Value)
 
 void ATPSPlayer::InputFire(const FInputActionValue& Value)
 {
+
+	auto anim = Cast<UPlayerAnim>(GetMesh()->GetAnimInstance());
+	if (anim->isFire) {
+		return;
+	}
+	UGameplayStatics::PlaySound2D(GetWorld(), bulletSound);
+	//카메라셰이크 재생
+	auto controller = GetWorld()->GetFirstPlayerController();
+	controller->PlayerCameraManager->StartCameraShake(cameraShake);
+	//공격 애니메이션 재생
+	anim->PlayAttackAnim();  // 공격 Montage를 플레이한다.
 	if (bUsingGrenadeGun)
 	{
 		// 총알 발사 처리
@@ -192,6 +225,7 @@ void ATPSPlayer::InputFire(const FInputActionValue& Value)
 		{
 			// 충돌 처리 -> 총알 파편 효과 재생
 			// 총알 파편 효과 트랜스폼
+
 			FTransform bulletTrans;
 			// 부딪힌 위치 할당
 			bulletTrans.SetLocation(hitInfo.ImpactPoint);
@@ -202,8 +236,9 @@ void ATPSPlayer::InputFire(const FInputActionValue& Value)
 			// 1. 만약 컴포넌트에 물리가 적용되어 있다면
 			if (hitComp && hitComp->IsSimulatingPhysics())
 			{
+				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("Hit"));
 				// 2. 날려버릴 힘과 방향이 필요
-				FVector force = -hitInfo.ImpactNormal * hitComp->GetMass() * 500000;
+				FVector force = -hitInfo.ImpactNormal * hitComp->GetMass() * 5000;
 				// 3. 그 방향으로 날려버리고 싶다.
 				hitComp->AddForce(force);
 			}
@@ -212,12 +247,13 @@ void ATPSPlayer::InputFire(const FInputActionValue& Value)
 			auto enemy = hitInfo.GetActor()->GetDefaultSubobjectByName(TEXT("FSM"));
 			if (enemy)
 			{
-				//auto enemyFSM = Cast<UEnemyFSM>(enemy);
-				//enemyFSM->OnDamageProcess();
+				auto enemyFSM = Cast<UEnemyFSM>(enemy);
+				enemyFSM->OnDamageProcess();
 			}
 		}
 	}
 }
+
 // 유탄총으로 변경
 void ATPSPlayer::ChangeToGrenadeGun()
 {
@@ -269,5 +305,16 @@ void ATPSPlayer::SniperAim()
 		// 4. 일반 조준 UI 등록
 		_crosshairUI->SetVisibility(ESlateVisibility::Visible);
 		//_crosshairUI->AddToViewport();
+	}
+}
+
+void ATPSPlayer::InputRun()
+{
+	auto movement = GetCharacterMovement();
+	if (movement->MaxWalkSpeed > walkSpeed) {
+		movement->MaxWalkSpeed = walkSpeed;
+	}
+	else {
+		movement->MaxWalkSpeed = runSpeed;
 	}
 }
